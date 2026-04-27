@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#0a0a0a">
-<title>BHMM K=10 — BTC regime detection</title>
+<title>Hourly Regime detector for BTC</title>
 <link rel="preconnect" href="https://cdn.plot.ly">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -676,16 +676,11 @@ body {
 
 <header class="header">
   <div class="brand">
-    <div class="brand-title">BHMM K=10 · BTC behavioral regime detection</div>
-    <div class="brand-subtitle">Variational Bayesian HMM · 54,448 hours · 2019-09 → 2026-04</div>
+    <div class="brand-title">Hourly Regime detector for BTC</div>
+    <div class="brand-subtitle">Trained 2019-09-20 → 2025-09-01 · Tested 2025-09-01 → 2026-04-16</div>
   </div>
   <div class="header-actions">
     <button class="btn" id="btn-about" title="About">About</button>
-    <a class="btn btn-icon" href="https://github.com/Attemptfour/bhmm-dashboard" title="GitHub" target="_blank" rel="noopener">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57v-2.04c-3.345.72-4.05-1.61-4.05-1.61-.54-1.395-1.32-1.755-1.32-1.755-1.08-.735.075-.72.075-.72 1.2.09 1.83 1.23 1.83 1.23 1.065 1.83 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.475-1.335-5.475-5.94 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.515.12-3.165 0 0 1.005-.315 3.3 1.23.945-.27 1.965-.405 2.985-.405s2.04.135 2.985.405c2.295-1.545 3.3-1.23 3.3-1.23.66 1.65.24 2.865.12 3.165.78.84 1.23 1.92 1.23 3.225 0 4.62-2.805 5.625-5.475 5.925.435.36.81 1.095.81 2.205v3.27c0 .315.225.69.825.57C20.565 21.795 24 17.31 24 12c0-6.63-5.37-12-12-12z"/>
-      </svg>
-    </a>
   </div>
 </header>
 
@@ -748,16 +743,6 @@ body {
     <div class="sidebar-section">
       <div class="sidebar-title">Regimes (click to inspect)</div>
       <div class="regime-list" id="regime-list"></div>
-    </div>
-
-    <div class="sidebar-section">
-      <div class="sidebar-title">About this model</div>
-      <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.6;">
-        Variational Bayesian HMM with K=10 hidden states fit on 20 hourly BTC features (price dynamics, volatility, conviction, macro context). Auto-pruning via Murphy's "rich get richer" digamma sparsity. Two independent Bayesian inference methods (CAVI VB and DS-HDP-HMM Gibbs) converge on the same regime structure at &gt;93% cosine similarity per regime.
-      </div>
-      <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.6; margin-top: 10px;">
-        Test split (Sep 2025 onward) uses forward-filter only — no lookahead. Train split uses smoother (correct for parameter estimation, no leakage to test).
-      </div>
     </div>
   </aside>
 </div>
@@ -1382,15 +1367,12 @@ function openRegimeModal(k) {
 }
 
 function openAboutModal() {
-  document.getElementById('modal-title').innerHTML = '<span>About BHMM K=10</span>';
+  document.getElementById('modal-title').innerHTML = '<span>About</span>';
   document.getElementById('modal-body').innerHTML = `
     <div style="font-size: 13px; line-height: 1.7; color: var(--text-secondary);">
-      <p style="margin-bottom: 12px;">A 10-state Bayesian Hidden Markov Model trained on 20 hourly BTC features (price dynamics, velocity, conviction, volatility, macro context). The model identifies <em>behavioral regimes</em> — psychological market states — not price patterns directly.</p>
-      <p style="margin-bottom: 12px;"><strong style="color: var(--text-primary);">Method:</strong> Variational Bayesian inference (CAVI) following Murphy (2023). Uninformative priors on the discovery pass. Auto-pruning via digamma sparsity collapses redundant regimes naturally.</p>
-      <p style="margin-bottom: 12px;"><strong style="color: var(--text-primary);">Validation:</strong> Two methodologically distinct Bayesian approaches (CAVI VB and Disentangled-Sticky HDP-HMM Gibbs sampling) converge on the same posterior structure at &gt;93% cosine similarity per regime. This is strong evidence the regime structure is real, not an artifact of any single method.</p>
-      <p style="margin-bottom: 12px;"><strong style="color: var(--text-primary);">Causality:</strong> The test split (Sep 2025 onward, ~5,445 hours) was inferred via forward-filter only — no information from t+1 onwards is used. This is what a live trader would see. The train split uses the forward-backward smoother, which is correct for parameter estimation and does not leak to test.</p>
-      <p style="margin-bottom: 12px;"><strong style="color: var(--text-primary);">Use:</strong> The regime posterior plus its entropy can be used as a high-quality prior for vol-trading strategies (e.g. straddles on consolidation regime exits) or as feature input to a downstream RL policy. The model does not predict direction directly.</p>
-      <p style="font-size: 11px; color: var(--text-tertiary); margin-top: 16px;">Underlying data: 54,448 hourly BTC bars · 2019-09-20 to 2026-04-16 · 80/20 train/test split.</p>
+      <p style="margin-bottom: 12px;">A regime detection model trained on custom-engineered data taken from the market.</p>
+      <p style="margin-bottom: 12px;"><strong style="color: var(--text-primary);">Trained on data ranging from</strong> 2019-09-20 to 2025-09-01 (49,003 hours).</p>
+      <p><strong style="color: var(--text-primary);">Tested on data from</strong> 2025-09-01 to 2026-04-16 (5,445 hours).</p>
     </div>
   `;
   document.getElementById('modal').classList.add('active');
