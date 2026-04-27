@@ -1065,6 +1065,7 @@ function drawPriceChart() {
   };
 
   Plotly.newPlot('chart-price', traces, layout, PLOTLY_CONFIG);
+  attachZoomListener('chart-price');
 }
 
 function drawPosteriorsChart() {
@@ -1140,6 +1141,7 @@ function drawPosteriorsChart() {
   };
 
   Plotly.newPlot('chart-posteriors', traces, layout, PLOTLY_CONFIG);
+  attachZoomListener('chart-posteriors');
 }
 
 function drawEntropyChart() {
@@ -1180,41 +1182,51 @@ function drawEntropyChart() {
   };
 
   Plotly.newPlot('chart-entropy', traces, layout, PLOTLY_CONFIG);
+  attachZoomListener('chart-entropy');
 }
 
 // ============================================================
 // SYNCED ZOOM ACROSS PANELS
 // ============================================================
 function setupSyncedZoom() {
-  const panels = ['chart-price', 'chart-posteriors', 'chart-entropy'];
-  const keys = { 'chart-price': 'price', 'chart-posteriors': 'posteriors', 'chart-entropy': 'entropy' };
-  let isUpdating = false;
+  // Listener attachment moved to attachZoomListener() which is called from each
+  // draw function after Plotly.newPlot completes. Calling el.on() on a div
+  // without a Plotly instance throws and kills script execution.
+  attachZoomListener('chart-price');
+}
 
-  panels.forEach(panelId => {
-    const el = document.getElementById(panelId);
-    el.on('plotly_relayout', (e) => {
-      if (isUpdating) return;
-      let newRange = null;
-      if (e['xaxis.range[0]'] !== undefined) {
-        newRange = [e['xaxis.range[0]'], e['xaxis.range[1]']];
-      } else if (e['xaxis.range'] !== undefined) {
-        newRange = e['xaxis.range'];
-      } else if (e['xaxis.autorange']) {
-        newRange = null;
-      } else {
-        return;
-      }
-      currentRange = newRange;
-      isUpdating = true;
-      panels.forEach(otherId => {
-        if (otherId === panelId) return;
-        // Only relayout charts that have been drawn
-        if (!chartsDrawn[keys[otherId]]) return;
-        const update = newRange ? { 'xaxis.range': newRange } : { 'xaxis.autorange': true };
-        Plotly.relayout(otherId, update);
-      });
-      isUpdating = false;
+let _zoomIsUpdating = false;
+const _zoomPanelKeys = { 'chart-price': 'price', 'chart-posteriors': 'posteriors', 'chart-entropy': 'entropy' };
+
+function attachZoomListener(panelId) {
+  const el = document.getElementById(panelId);
+  // Guard: el.on only exists after Plotly has drawn into this div
+  if (!el || typeof el.on !== 'function') return;
+  // Avoid double-attach if function is called multiple times
+  if (el._zoomListenerAttached) return;
+  el._zoomListenerAttached = true;
+
+  el.on('plotly_relayout', (e) => {
+    if (_zoomIsUpdating) return;
+    let newRange = null;
+    if (e['xaxis.range[0]'] !== undefined) {
+      newRange = [e['xaxis.range[0]'], e['xaxis.range[1]']];
+    } else if (e['xaxis.range'] !== undefined) {
+      newRange = e['xaxis.range'];
+    } else if (e['xaxis.autorange']) {
+      newRange = null;
+    } else {
+      return;
+    }
+    currentRange = newRange;
+    _zoomIsUpdating = true;
+    Object.keys(_zoomPanelKeys).forEach(otherId => {
+      if (otherId === panelId) return;
+      if (!chartsDrawn[_zoomPanelKeys[otherId]]) return;
+      const update = newRange ? { 'xaxis.range': newRange } : { 'xaxis.autorange': true };
+      Plotly.relayout(otherId, update);
     });
+    _zoomIsUpdating = false;
   });
 }
 
