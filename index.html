@@ -979,15 +979,34 @@ function drawAllCharts() {
 }
 
 function drawPriceChart() {
-  const traces = [];
-  const regimeColorArray = data.regimes.map(r => getRegimeColor(r));
-  const regimeNameArray = data.regimes.map(r => getRegimeName(r));
+  // Performance: at full zoom-out, 54k hover-tracked markers freeze the main thread on click.
+  // Decimate to ~6000 markers for the visible-by-default trace; Plotly handles zoom-in re-rendering naturally.
+  const N = data.timestamps.length;
+  const TARGET_DOTS = 6000;
+  const stride = Math.max(1, Math.floor(N / TARGET_DOTS));
 
-  // Faint connecting line so the price path is readable when zoomed out
-  // (markers alone become visually noisy across 54k hours)
+  const sampledTimestamps = [];
+  const sampledPrices = [];
+  const sampledRegimes = [];
+  const sampledRegimeNames = [];
+  const sampledColors = [];
+  const sampledEntropies = [];
+
+  for (let i = 0; i < N; i += stride) {
+    sampledTimestamps.push(data.timestamps[i]);
+    sampledPrices.push(data.prices[i]);
+    sampledRegimes.push(data.regimes[i]);
+    sampledRegimeNames.push(getRegimeName(data.regimes[i]));
+    sampledColors.push(getRegimeColor(data.regimes[i]));
+    sampledEntropies.push(data.entropies[i]);
+  }
+
+  const traces = [];
+
+  // Faint connecting line - light decimation, just for path readability
   traces.push({
-    x: data.timestamps,
-    y: data.prices,
+    x: sampledTimestamps,
+    y: sampledPrices,
     type: 'scattergl',
     mode: 'lines',
     name: 'BTC',
@@ -996,41 +1015,40 @@ function drawPriceChart() {
     showlegend: false
   });
 
-  // Regime-colored markers on each hour. At full zoom-out these merge into a
-  // colored band; at hourly zoom they resolve into individual dots.
+  // Regime-colored markers, decimated for performance
   traces.push({
-    x: data.timestamps,
-    y: data.prices,
+    x: sampledTimestamps,
+    y: sampledPrices,
     type: 'scattergl',
     mode: 'markers',
     name: 'Hour',
     marker: {
-      color: regimeColorArray,
+      color: sampledColors,
       size: 4,
       line: { width: 0 }
     },
-    customdata: data.regimes.map((r, i) => [regimeNameArray[i], data.entropies[i]]),
+    customdata: sampledRegimeNames.map((n, i) => [n, sampledEntropies[i]]),
     hovertemplate: '<b>%{x|%Y-%m-%d %H:%M}</b><br>Price: $%{y:,.2f}<br>%{customdata[0]} · H=%{customdata[1]:.3f}<extra></extra>',
     showlegend: false
   });
 
-  // Regime strip below the price chart (kept — still useful at zoomed-out views)
-  const stripY = data.regimes.map(r => 1);
+  // Regime strip below price chart - also decimated
+  const stripY = sampledRegimes.map(r => 1);
   traces.push({
-    x: data.timestamps,
+    x: sampledTimestamps,
     y: stripY,
     type: 'scattergl',
     mode: 'markers',
     name: 'Regime',
     marker: {
-      color: regimeColorArray,
+      color: sampledColors,
       size: 8,
       symbol: 'square',
       line: { width: 0 }
     },
     yaxis: 'y2',
     hovertemplate: '%{customdata}<extra></extra>',
-    customdata: regimeNameArray,
+    customdata: sampledRegimeNames,
     showlegend: false
   });
 
