@@ -1061,7 +1061,7 @@ function drawPriceChart() {
       range: [0.5, 1.5],
       linecolor: '#1a1a1a'
     },
-    xaxis: { ...PLOTLY_LAYOUT_BASE.xaxis, showticklabels: false }
+    xaxis: { ...PLOTLY_LAYOUT_BASE.xaxis }
   };
 
   Plotly.newPlot('chart-price', traces, layout, PLOTLY_CONFIG);
@@ -1237,13 +1237,18 @@ function setupControls() {
       const key = btn.dataset.toggle;
       visibility[key] = !visibility[key];
       btn.classList.toggle('active', visibility[key]);
-      document.getElementById('panel-' + key).classList.toggle('hidden', !visibility[key]);
-      // Lazy-draw on first activation
+      const panel = document.getElementById('panel-' + key);
+      panel.classList.toggle('hidden', !visibility[key]);
+      // Lazy-draw on first activation. CRITICAL: un-hide first, then wait for
+      // layout to compute non-zero panel size before Plotly tries to draw,
+      // otherwise Plotly initializes with 0x0 dimensions and stays invisible.
       if (visibility[key] && !chartsDrawn[key]) {
-        if (key === 'price') drawPriceChart();
-        if (key === 'posteriors') drawPosteriorsChart();
-        if (key === 'entropy') drawEntropyChart();
-        chartsDrawn[key] = true;
+        requestAnimationFrame(() => {
+          if (key === 'price') drawPriceChart();
+          if (key === 'posteriors') drawPosteriorsChart();
+          if (key === 'entropy') drawEntropyChart();
+          chartsDrawn[key] = true;
+        });
       }
     });
   });
