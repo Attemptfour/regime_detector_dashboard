@@ -715,8 +715,8 @@ body {
   <div class="control-group">
     <span class="control-label">Show</span>
     <button class="btn toggle-btn active" data-toggle="price">Price</button>
-    <button class="btn toggle-btn active" data-toggle="posteriors">Posteriors</button>
-    <button class="btn toggle-btn active" data-toggle="entropy">Entropy</button>
+    <button class="btn toggle-btn" data-toggle="posteriors">Posteriors</button>
+    <button class="btn toggle-btn" data-toggle="entropy">Entropy</button>
   </div>
   <div class="control-group">
     <button class="btn" id="btn-reset">Reset zoom</button>
@@ -730,10 +730,10 @@ body {
         <div class="chart-loading">Loading 54k hours of BTC data</div>
         <div id="chart-price" style="width: 100%; height: 100%;"></div>
       </div>
-      <div class="chart-panel" id="panel-posteriors">
+      <div class="chart-panel hidden" id="panel-posteriors">
         <div id="chart-posteriors" style="width: 100%; height: 100%;"></div>
       </div>
-      <div class="chart-panel" id="panel-entropy">
+      <div class="chart-panel hidden" id="panel-entropy">
         <div id="chart-entropy" style="width: 100%; height: 100%;"></div>
       </div>
     </div>
@@ -771,7 +771,8 @@ const STORAGE_KEY = 'regime_detector_v1';
 let data = null;
 let metadata = null;
 let userSettings = loadUserSettings();
-let visibility = { price: true, posteriors: true, entropy: true };
+let visibility = { price: true, posteriors: false, entropy: false };
+let chartsDrawn = { price: false, posteriors: false, entropy: false };
 let currentPeriod = 'all';
 let currentRange = null;
 
@@ -973,40 +974,31 @@ function renderRegimeList() {
 // CHART DRAWING
 // ============================================================
 function drawAllCharts() {
-  drawPriceChart();
-  drawPosteriorsChart();
-  drawEntropyChart();
+  if (visibility.price && !chartsDrawn.price) {
+    drawPriceChart();
+    chartsDrawn.price = true;
+  }
+  if (visibility.posteriors && !chartsDrawn.posteriors) {
+    drawPosteriorsChart();
+    chartsDrawn.posteriors = true;
+  }
+  if (visibility.entropy && !chartsDrawn.entropy) {
+    drawEntropyChart();
+    chartsDrawn.entropy = true;
+  }
 }
 
 function drawPriceChart() {
-  // Performance: at full zoom-out, 54k hover-tracked markers freeze the main thread on click.
-  // Decimate to ~6000 markers for the visible-by-default trace; Plotly handles zoom-in re-rendering naturally.
   const N = data.timestamps.length;
-  const TARGET_DOTS = 6000;
-  const stride = Math.max(1, Math.floor(N / TARGET_DOTS));
-
-  const sampledTimestamps = [];
-  const sampledPrices = [];
-  const sampledRegimes = [];
-  const sampledRegimeNames = [];
-  const sampledColors = [];
-  const sampledEntropies = [];
-
-  for (let i = 0; i < N; i += stride) {
-    sampledTimestamps.push(data.timestamps[i]);
-    sampledPrices.push(data.prices[i]);
-    sampledRegimes.push(data.regimes[i]);
-    sampledRegimeNames.push(getRegimeName(data.regimes[i]));
-    sampledColors.push(getRegimeColor(data.regimes[i]));
-    sampledEntropies.push(data.entropies[i]);
-  }
+  const regimeColorArray = data.regimes.map(r => getRegimeColor(r));
+  const regimeNameArray = data.regimes.map(r => getRegimeName(r));
 
   const traces = [];
 
-  // Faint connecting line - light decimation, just for path readability
+  // Faint connecting line (full resolution)
   traces.push({
-    x: sampledTimestamps,
-    y: sampledPrices,
+    x: data.timestamps,
+    y: data.prices,
     type: 'scattergl',
     mode: 'lines',
     name: 'BTC',
@@ -1015,40 +1007,40 @@ function drawPriceChart() {
     showlegend: false
   });
 
-  // Regime-colored markers, decimated for performance
+  // Full 54k regime-colored markers
   traces.push({
-    x: sampledTimestamps,
-    y: sampledPrices,
+    x: data.timestamps,
+    y: data.prices,
     type: 'scattergl',
     mode: 'markers',
     name: 'Hour',
     marker: {
-      color: sampledColors,
+      color: regimeColorArray,
       size: 4,
       line: { width: 0 }
     },
-    customdata: sampledRegimeNames.map((n, i) => [n, sampledEntropies[i]]),
+    customdata: data.regimes.map((r, i) => [regimeNameArray[i], data.entropies[i]]),
     hovertemplate: '<b>%{x|%Y-%m-%d %H:%M}</b><br>Price: $%{y:,.2f}<br>%{customdata[0]} · H=%{customdata[1]:.3f}<extra></extra>',
     showlegend: false
   });
 
-  // Regime strip below price chart - also decimated
-  const stripY = sampledRegimes.map(r => 1);
+  // Regime strip below price chart (full resolution)
+  const stripY = data.regimes.map(r => 1);
   traces.push({
-    x: sampledTimestamps,
+    x: data.timestamps,
     y: stripY,
     type: 'scattergl',
     mode: 'markers',
     name: 'Regime',
     marker: {
-      color: sampledColors,
+      color: regimeColorArray,
       size: 8,
       symbol: 'square',
       line: { width: 0 }
     },
     yaxis: 'y2',
     hovertemplate: '%{customdata}<extra></extra>',
-    customdata: sampledRegimeNames,
+    customdata: regimeNameArray,
     showlegend: false
   });
 
@@ -1195,6 +1187,7 @@ function drawEntropyChart() {
 // ============================================================
 function setupSyncedZoom() {
   const panels = ['chart-price', 'chart-posteriors', 'chart-entropy'];
+  const keys = { 'chart-price': 'price', 'chart-posteriors': 'posteriors', 'chart-entropy': 'entropy' };
   let isUpdating = false;
 
   panels.forEach(panelId => {
@@ -1215,6 +1208,8 @@ function setupSyncedZoom() {
       isUpdating = true;
       panels.forEach(otherId => {
         if (otherId === panelId) return;
+        // Only relayout charts that have been drawn
+        if (!chartsDrawn[keys[otherId]]) return;
         const update = newRange ? { 'xaxis.range': newRange } : { 'xaxis.autorange': true };
         Plotly.relayout(otherId, update);
       });
@@ -1243,6 +1238,13 @@ function setupControls() {
       visibility[key] = !visibility[key];
       btn.classList.toggle('active', visibility[key]);
       document.getElementById('panel-' + key).classList.toggle('hidden', !visibility[key]);
+      // Lazy-draw on first activation
+      if (visibility[key] && !chartsDrawn[key]) {
+        if (key === 'price') drawPriceChart();
+        if (key === 'posteriors') drawPosteriorsChart();
+        if (key === 'entropy') drawEntropyChart();
+        chartsDrawn[key] = true;
+      }
     });
   });
 
@@ -1290,7 +1292,9 @@ function applyPeriod(period) {
     range = [startDate.toISOString().slice(0, 19), last];
   }
 
+  const panelKeys = { 'chart-price': 'price', 'chart-posteriors': 'posteriors', 'chart-entropy': 'entropy' };
   panels.forEach(panelId => {
+    if (!chartsDrawn[panelKeys[panelId]]) return;
     const update = range ? { 'xaxis.range': range } : { 'xaxis.autorange': true };
     Plotly.relayout(panelId, update);
   });
@@ -1369,7 +1373,10 @@ function openRegimeModal(k) {
       saveUserSettings();
       renderRegimeList();
       renderStatusTile();
-      drawAllCharts();
+      // Force redraw of any already-drawn charts so renames propagate
+      if (chartsDrawn.price) drawPriceChart();
+      if (chartsDrawn.posteriors) drawPosteriorsChart();
+      if (chartsDrawn.entropy) drawEntropyChart();
       closeModal();
     }
   });
@@ -1379,7 +1386,9 @@ function openRegimeModal(k) {
     saveUserSettings();
     renderRegimeList();
     renderStatusTile();
-    drawAllCharts();
+    if (chartsDrawn.price) drawPriceChart();
+    if (chartsDrawn.posteriors) drawPosteriorsChart();
+    if (chartsDrawn.entropy) drawEntropyChart();
     closeModal();
   });
 }
