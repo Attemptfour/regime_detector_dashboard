@@ -1198,6 +1198,12 @@ function setupSyncedZoom() {
 let _zoomIsUpdating = false;
 const _zoomPanelKeys = { 'chart-price': 'price', 'chart-posteriors': 'posteriors', 'chart-entropy': 'entropy' };
 
+function _rangesEqual(a, b) {
+  if (a === null && b === null) return true;
+  if (!a || !b) return false;
+  return a[0] === b[0] && a[1] === b[1];
+}
+
 function attachZoomListener(panelId) {
   const el = document.getElementById(panelId);
   // Guard: el.on only exists after Plotly has drawn into this div
@@ -1218,6 +1224,10 @@ function attachZoomListener(panelId) {
     } else {
       return;
     }
+    // Async-safe guard: plotly_relayout events fire AFTER Plotly.relayout
+    // schedules a redraw, so the synchronous _zoomIsUpdating flag misses
+    // propagated events bouncing back. Short-circuit by range identity.
+    if (_rangesEqual(newRange, currentRange)) return;
     currentRange = newRange;
     _zoomIsUpdating = true;
     Object.keys(_zoomPanelKeys).forEach(otherId => {
